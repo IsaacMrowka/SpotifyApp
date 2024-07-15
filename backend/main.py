@@ -1,12 +1,12 @@
 from flask import Flask, redirect, request, jsonify, session
 import requests, os, datetime, urllib.parse
 from datetime import datetime, timedelta
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 
 app = Flask(__name__)
 #CORS(app)
-CORS(app, supports_credentials=True)
+CORS(app, origins=["http://localhost:5173"] ,supports_credentials=True)
 
 app.secret_key = os.urandom(24)
 
@@ -47,7 +47,7 @@ def login():
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': False,  # change if requests are renewed forces relogin for debugging
+        'show_dialog': True,  # True renewed forces relogin for debugging
     }
     
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -96,7 +96,7 @@ def get_playlists():
     
     return jsonify(playlists)
 
-@app.route('/user')
+@app.route('/api/user')
 def get_spotify_user():
     if 'access_token' not in session:
         return redirect('/login')
