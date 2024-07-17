@@ -3,14 +3,16 @@ import requests, os, datetime, urllib.parse
 from datetime import datetime, timedelta
 from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
+from sqlalchemy.orm import sessionmaker
+from db_operations import Track, engine
 
 app = Flask(__name__)
-#CORS(app)
 CORS(app, origins=["http://localhost:5173"] ,supports_credentials=True)
-
 app.secret_key = os.urandom(24)
-
 load_dotenv()
+Session = sessionmaker(bind=engine)
+DBsession = Session()
+
 
 @app.route('/')
 def index():
@@ -41,13 +43,13 @@ def refresh_access_token():
         
 @app.route('/login')
 def login():
-    scope = 'user-read-private user-read-email'
+    scope = 'user-read-private, user-read-email, user-library-read'
     params = {
         'client_id': os.getenv("CLIENT_ID"),
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': True,  # True renewed forces relogin for debugging
+        'show_dialog': False,  # True renewed forces relogin for debugging
     }
     
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -78,39 +80,75 @@ def callback():
         session['refresh_token'] = token_info.get('refresh_token')
         session['expires_at'] = datetime.now().timestamp() + token_info.get('expires_in', 3600)
 
-        return redirect('http://localhost:5173/')
+        return redirect('http://localhost:5000/api/tracks')
 
-@app.route('/playlists')
-def get_playlists():
+def tokencheck():
     if 'access_token' not in session:
         return redirect('/login')
     
     if datetime.now().timestamp() > session['expires_at']:
         return redirect('refresh-token')
-    
+
+
+@app.route('/api/playlists')
+def get_playlists():
+    tokencheck()
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
     response = requests.get(os.getenv("API_BASE_URL") + 'me/playlists', headers=headers)
-    playlists = response.json()
-    
-    return jsonify(playlists)
-
+    return(response.json())
 @app.route('/api/user')
 def get_spotify_user():
-    if 'access_token' not in session:
-        return redirect('/login')
-    
-    if datetime.now().timestamp() > session['expires_at']:
-        return redirect('refresh-token')
-    
+    tokencheck()
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
     response = requests.get(os.getenv("API_BASE_URL") + 'me', headers=headers)
-    user = response.json()
+    return(response.json())
 
-    return jsonify(user)
+@app.route('/api/tracks')
+def get_liked_tracks():
+    tokencheck()
+    headers = {
+        'Authorization': f"Bearer {session['access_token']}"
+    }        
+    response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks', headers=headers)
+    track_json = response.json()
+
+    for item in track_json["items"]:
+        track = item["track"]
+        track_id = track["id"]
+        track_name = track["name"]
+        
+
+        new_track = Track(id=track_id, name=track_name)
+        DBsession.add(new_track)
+    DBsession.commit()
+    return response.json()
+
+'''
+        for artist in artists:
+            genres = artist.get("genres", [])
+    
+    for
+    for playlists in user playlists
+        if playlists != genre
+            create playlist called genre
+
+    for track_id with genre
+        add to playlist == genre.
+            
+    return(liked_tracks)
+    
+    #NOTE FOR TMR MAKE A DATABSE TAHT WILL SAVE THE IDS NAME AND GENRES AND THEN UPDATE THE PLAYLIST THING THAT WAY WE CAN HAVE SEPERATE
+    #ROUTES AND KEEP ALL OUR INFO
+    #track > aritsts > genre
+'''
+
+@app.route('/api/updatePlaylists')
+def update_playlists():
+    get_liked_tracks()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
