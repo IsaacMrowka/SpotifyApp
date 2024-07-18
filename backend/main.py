@@ -105,46 +105,48 @@ def get_spotify_user():
         'Authorization': f"Bearer {session['access_token']}"
     }
     response = requests.get(os.getenv("API_BASE_URL") + 'me', headers=headers)
-    return(response.json())
+    return response.json()
 
 @app.route('/api/tracks')
 def get_liked_tracks():
     tokencheck()
+
+    #endpoint to get users liked songs
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }        
-    response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks', headers=headers)
-    track_json = response.json()
-
-    for item in track_json["items"]:
-        track = item["track"]
-        track_id = track["id"]
-        track_name = track["name"]
-        
-
-        new_track = Track(id=track_id, name=track_name)
-        DBsession.add(new_track)
-    DBsession.commit()
-    return response.json()
-
-'''
-        for artist in artists:
-            genres = artist.get("genres", [])
-    
-    for
-    for playlists in user playlists
-        if playlists != genre
-            create playlist called genre
-
-    for track_id with genre
-        add to playlist == genre.
+    response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks?limit=10', headers=headers)
+    '''
+    #endpoint to get genre through artist as it is not available through song data
+    headers = {
+        'Authorization': f"Bearer {session['access_token']}"
+    }        
+    artist_response = requests.get(os.getenv("API_BASE_URL") + '/artists?ids=2CIMQHirSU0MQqyYHq0eOx%2C57dN52uHvrHOxijzpIgu3E%2C1vCWHaC5f2uS3yhpwWbIA6', headers=headers)
+    '''
+    #collect artist id's and then use new endpoint to access artrist genre data then add and commit to database connecting the song artist ids
+    try:
+        track_json = response.json()
+        for item in track_json["items"]:
+            track = item["track"]
+            track_id = track["id"]
+            track_name = track["name"]
+            track_artist = track["artists"][0]
+            artist_name = track_artist["name"]
+            existing_track = DBsession.query(Track).filter(Track.id == track_id).first()
+            if existing_track:
+                existing_track.name = track_name
+                existing_track.artist_name = artist_name
+            else:
+                new_track = Track(id=track_id, name=track_name, artist=artist_name)
+                DBsession.add(new_track)
             
-    return(liked_tracks)
-    
-    #NOTE FOR TMR MAKE A DATABSE TAHT WILL SAVE THE IDS NAME AND GENRES AND THEN UPDATE THE PLAYLIST THING THAT WAY WE CAN HAVE SEPERATE
-    #ROUTES AND KEEP ALL OUR INFO
-    #track > aritsts > genre
-'''
+            DBsession.commit()
+    except Exception as e:
+        DBsession.rollback()
+        return {"error": str(e)}, 500
+    finally:
+        DBsession.close()
+    return track_json  
 
 @app.route('/api/updatePlaylists')
 def update_playlists():
