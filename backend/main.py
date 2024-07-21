@@ -3,8 +3,8 @@ import requests, os, datetime, urllib.parse
 from datetime import datetime, timedelta
 from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
-from sqlalchemy.orm import sessionmaker
-from db_operations import Track, engine
+from sqlalchemy.orm import sessionmaker, load_only
+from db_operations import Track, Recommendations, NewPlaylist, engine
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173"] ,supports_credentials=True)
@@ -12,7 +12,6 @@ app.secret_key = os.urandom(24)
 load_dotenv()
 Session = sessionmaker(bind=engine)
 DBsession = Session()
-
 
 @app.route('/')
 def index():
@@ -49,7 +48,7 @@ def login():
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': False,  # True renewed forces relogin for debugging
+        'show_dialog': True,  # True renewed forces relogin for debugging
     }
     
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -80,7 +79,7 @@ def callback():
         session['refresh_token'] = token_info.get('refresh_token')
         session['expires_at'] = datetime.now().timestamp() + token_info.get('expires_in', 3600)
 
-        return redirect('http://localhost:5000/api/tracks')
+        return redirect('/api/tracks')
 
 def tokencheck():
     if 'access_token' not in session:
@@ -95,7 +94,7 @@ def get_playlists():
     tokencheck()
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
-    }
+    } 
     response = requests.get(os.getenv("API_BASE_URL") + 'me/playlists', headers=headers)
     return(response.json())
 @app.route('/api/user')
@@ -116,41 +115,84 @@ def get_liked_tracks():
         'Authorization': f"Bearer {session['access_token']}"
     }        
     response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks?limit=10', headers=headers)
-    '''
-    #endpoint to get genre through artist as it is not available through song data
-    headers = {
-        'Authorization': f"Bearer {session['access_token']}"
-    }        
-    artist_response = requests.get(os.getenv("API_BASE_URL") + '/artists?ids=2CIMQHirSU0MQqyYHq0eOx%2C57dN52uHvrHOxijzpIgu3E%2C1vCWHaC5f2uS3yhpwWbIA6', headers=headers)
-    '''
-    #collect artist id's and then use new endpoint to access artrist genre data then add and commit to database connecting the song artist ids
+   
     try:
         track_json = response.json()
         for item in track_json["items"]:
             track = item["track"]
             track_id = track["id"]
             track_name = track["name"]
-            track_artist = track["artists"][0]
-            artist_name = track_artist["name"]
             existing_track = DBsession.query(Track).filter(Track.id == track_id).first()
             if existing_track:
                 existing_track.name = track_name
-                existing_track.artist_name = artist_name
             else:
-                new_track = Track(id=track_id, name=track_name, artist=artist_name)
-                DBsession.add(new_track)
+                liked_tracks = Track(id=track_id, name=track_name)
+                DBsession.add(liked_tracks)
             
             DBsession.commit()
     except Exception as e:
         DBsession.rollback()
-        return {"error": str(e)}, 500
+        return {"error in database for liked": str(e)}, 500
     finally:
         DBsession.close()
-    return track_json  
+    return redirect('/api/recommendations')  
 
-@app.route('/api/updatePlaylists')
-def update_playlists():
-    get_liked_tracks()
+@app.route('/api/recommendations')
+def get_recommendations():
+    tokencheck()
+    #endpoint to get track recommendations songs
+    headers = {
+        'Authorization': f"Bearer {session['access_token']}"
+    }
+    DBtrack = DBsession.query(Track).options(load_only(Track.id)).first()
+    track_id = DBtrack.id
+    response = requests.get(os.getenv("API_BASE_URL") + 'recommendations?limit=50&seed_tracks=0WQZG47PGOUzuQuMpB8gC0', headers=headers)
+    recommendations_json = response.json()
+    try:
+        for track in recommendations_json["tracks"]:
+            track_id = track["id"]
+            track_name = track["name"]
+            existing_track = DBsession.query(Track).filter(Recommendations.id == track_id).first()
+            if existing_track:
+                existing_track.name = track_name
+            else:
+                track_recommendations = Recommendations(id=track_id, name=track_name)
+                DBsession.add(track_recommendations)
+
+            DBsession.commit()
+    except Exception as e:
+        DBsession.rollback()
+        return {"error in databse in recommendations": str(e)}, 500
+    finally:
+        DBsession.close()
+    return redirect('/api/check-liked')  
+
+@app.route('/api/check-liked')
+def check_liked():
+    tokencheck()
+    headers = {
+    'Authorization': f"Bearer {session['access_token']}"
+    }    
+    recommendations = DBsession.query(Recommendations.id, Recommendations.name).all()
+    liked_recommendations_json = []
+
+    for recommendation in recommendations:
+        track_id = recommendation.id
+        track_name = recommendation.name
+
+        response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks/contains?ids='+track_id, headers=headers)
+        liked_recommendations_json.append(response.json())
+        #from Recommendations move to new table Generated playlist
+        for check in liked_recommendations_json:
+            if check == 'true':
+                existing_track = DBsession.query(NewPlaylist).filter(NewPlaylist.id == track_id).first()
+                if existing_track:
+                    existing_track.name = track_name
+            else:
+                track_recommendations = NewPlaylist(id=track_id, name=track_name)
+                DBsession.add(track_recommendations)
+    DBsession.close()
+    return liked_recommendations_json
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
