@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker, load_only
-from sqlalchemy import inspect
+from sqlalchemy import asc, inspect
 from db_operations import Track, Recommendations, NewPlaylist, engine
 
 app = Flask(__name__)
@@ -138,7 +138,7 @@ def get_liked_tracks():
     finally:
         DBsession.close()
     return redirect('/api/recommendations')  
-
+json_test= None
 @app.route('/api/recommendations')
 def get_recommendations():
     tokencheck()
@@ -146,14 +146,14 @@ def get_recommendations():
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
-    DBtrack = DBsession.query(Track).options(load_only(Track.id)).first()
-    track_id = DBtrack.id
     response = requests.get(os.getenv("API_BASE_URL") + 'recommendations?limit=50&seed_tracks=1HOhw9h6IpSVpFPS6OzUu4', headers=headers)
     recommendations_json = response.json()
-
+    global json_test
+    json_test = recommendations_json
     #delete any recommendations from prior request
     DBsession.query(Recommendations).delete()
     DBsession.commit()
+    i = 1
     try:
         for track in recommendations_json["tracks"]:
             track_id = track["id"]
@@ -162,8 +162,9 @@ def get_recommendations():
             if existing_track:
                 existing_track.name = track_name
             else:
-                track_recommendations = Recommendations(id=track_id, name=track_name)
+                track_recommendations = Recommendations(index= i, id=track_id, name=track_name)
                 DBsession.add(track_recommendations)
+                i += 1
 
             DBsession.commit()
     except Exception as e:
@@ -172,6 +173,7 @@ def get_recommendations():
     finally:
         DBsession.close()
     return redirect('/api/create_new_playlist')  
+#this database matches spotify response json
 
 @app.route('/api/create_new_playlist')
 def create_new_playlist():
@@ -179,12 +181,14 @@ def create_new_playlist():
     headers = {
     'Authorization': f"Bearer {session['access_token']}"
     }    
-    recommendations = DBsession.query(Recommendations.id).limit(50).all()
+    recommendations = DBsession.query(Recommendations.id).order_by(asc(Recommendations.index)).limit(50).all()
     track_id_list = []
+    print(recommendations, "STHEOHTPEOHTEPOTH")
+    track_id_list = [str(recommendation.id) for recommendation in recommendations]
+    print(track_id_list, "opopopopopopopopopopo")
 
-    for recommendation in recommendations:
-        track_id_list.append(recommendation.id)
     track_id_list = ','.join(track_id_list)
+    print(track_id_list, "MEOWMOEWMOEWMOEWMOEWMOEWMOEWMO")
     response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks/contains?ids='+track_id_list, headers=headers)
     liked_recommendations_json = response.json()
     
@@ -198,6 +202,7 @@ def create_new_playlist():
     print(index, "OMGOMGOMGOGM")
     #find the corresponding indeces in the recommendations data
     new_playlist_tracks = []
+    i=1
     for i, track in enumerate(track_id_list):
         if i in index:
             new_playlist_tracks.append(track)
@@ -223,11 +228,11 @@ def create_new_playlist():
     #add tracks to the playlist
     id_list = []
     for id in new_playlist_tracks:
-        id_list.append(new_playlist_tracks)
+        id_list.append(id)
     id_list = ','.join(id_list)
     try:
         requests.post(os.getenv("API_BASE_URL") + 'playlists/'+playlist_id+'/tracks?', headers=headers)
-    finally: return("yipyy!")
+    finally: return(json_test)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)

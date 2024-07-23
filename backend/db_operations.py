@@ -13,6 +13,7 @@ class Track(Base):
 
 class Recommendations(Base):
     __tablename__ = "track_recommendations"
+    index = Column(Integer, index=True)
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
 
