@@ -1,9 +1,10 @@
 from flask import Flask, redirect, request, jsonify, session
-import requests, os, datetime, urllib.parse
+import requests, os, datetime, urllib.parse, json
 from datetime import datetime, timedelta
 from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker, load_only
+from sqlalchemy import inspect
 from db_operations import Track, Recommendations, NewPlaylist, engine
 
 app = Flask(__name__)
@@ -42,7 +43,7 @@ def refresh_access_token():
         
 @app.route('/login')
 def login():
-    scope = 'user-read-private, user-read-email, user-library-read'
+    scope = 'user-read-private, user-read-email, user-library-read, playlist-read-private, playlist-read-collaborative, playlist-modify-public, playlist-modify-private'
     params = {
         'client_id': os.getenv("CLIENT_ID"),
         'response_type': 'code',
@@ -52,7 +53,7 @@ def login():
     }
     
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
-    return redirect(auth_url)
+    return redirect(auth_url) #do not change url
 
 @app.route('/callback')
 def callback():
@@ -97,6 +98,7 @@ def get_playlists():
     } 
     response = requests.get(os.getenv("API_BASE_URL") + 'me/playlists', headers=headers)
     return(response.json())
+
 @app.route('/api/user')
 def get_spotify_user():
     tokencheck()
@@ -146,8 +148,12 @@ def get_recommendations():
     }
     DBtrack = DBsession.query(Track).options(load_only(Track.id)).first()
     track_id = DBtrack.id
-    response = requests.get(os.getenv("API_BASE_URL") + 'recommendations?limit=50&seed_tracks=0WQZG47PGOUzuQuMpB8gC0', headers=headers)
+    response = requests.get(os.getenv("API_BASE_URL") + 'recommendations?limit=50&seed_tracks=1HOhw9h6IpSVpFPS6OzUu4', headers=headers)
     recommendations_json = response.json()
+
+    #delete any recommendations from prior request
+    DBsession.query(Recommendations).delete()
+    DBsession.commit()
     try:
         for track in recommendations_json["tracks"]:
             track_id = track["id"]
@@ -165,34 +171,63 @@ def get_recommendations():
         return {"error in databse in recommendations": str(e)}, 500
     finally:
         DBsession.close()
-    return redirect('/api/check-liked')  
+    return redirect('/api/create_new_playlist')  
 
-@app.route('/api/check-liked')
-def check_liked():
+@app.route('/api/create_new_playlist')
+def create_new_playlist():
     tokencheck()
     headers = {
     'Authorization': f"Bearer {session['access_token']}"
     }    
-    recommendations = DBsession.query(Recommendations.id, Recommendations.name).all()
-    liked_recommendations_json = []
+    recommendations = DBsession.query(Recommendations.id).limit(50).all()
+    track_id_list = []
 
     for recommendation in recommendations:
-        track_id = recommendation.id
-        track_name = recommendation.name
+        track_id_list.append(recommendation.id)
+    track_id_list = ','.join(track_id_list)
+    response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks/contains?ids='+track_id_list, headers=headers)
+    liked_recommendations_json = response.json()
+    
+    #index the 'true' bool from the json data
+    liked_rec_string = json.dumps(liked_recommendations_json)
+    split_string = liked_rec_string.split()
+    index= []
+    for i, string in enumerate(split_string):
+        if 'true' in string:
+            index.append(i + 1)
+    print(index, "OMGOMGOMGOGM")
+    #find the corresponding indeces in the recommendations data
+    new_playlist_tracks = []
+    for i, track in enumerate(track_id_list):
+        if i in index:
+            new_playlist_tracks.append(track)
+    print(i,"PEEEW", new_playlist_tracks)
+    
+    #get user for creating playlist
+    user_response = requests.get(os.getenv("API_BASE_URL") + 'me', headers=headers)
+    user_json = user_response.json()
+    user_id = None
+    user_id = user_json.get('id', None)
 
-        response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks/contains?ids='+track_id, headers=headers)
-        liked_recommendations_json.append(response.json())
-        #from Recommendations move to new table Generated playlist
-        for check in liked_recommendations_json:
-            if check == 'true':
-                existing_track = DBsession.query(NewPlaylist).filter(NewPlaylist.id == track_id).first()
-                if existing_track:
-                    existing_track.name = track_name
-            else:
-                track_recommendations = NewPlaylist(id=track_id, name=track_name)
-                DBsession.add(track_recommendations)
-    DBsession.close()
-    return liked_recommendations_json
+    #get the playlist id after creation
+    req_body = '{ "name": "YIPPPPYYYYY", "description": "Playlist based on recommendations", "public": false }'
+    create_playlist_response = requests.post(os.getenv("API_BASE_URL") + 'users/'+user_id+'/playlists', data=req_body, headers=headers)
+    create_playlist_json = create_playlist_response.json()
+
+
+#works until this point 
+
+    playlist_id = None
+    playlist_id = create_playlist_json.get('id', None)
+
+    #add tracks to the playlist
+    id_list = []
+    for id in new_playlist_tracks:
+        id_list.append(new_playlist_tracks)
+    id_list = ','.join(id_list)
+    try:
+        requests.post(os.getenv("API_BASE_URL") + 'playlists/'+playlist_id+'/tracks?', headers=headers)
+    finally: return("yipyy!")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
