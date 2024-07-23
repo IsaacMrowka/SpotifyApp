@@ -80,7 +80,7 @@ def callback():
         session['refresh_token'] = token_info.get('refresh_token')
         session['expires_at'] = datetime.now().timestamp() + token_info.get('expires_in', 3600)
 
-        return redirect('/api/tracks')
+        return redirect('/api/refresh')
 
 def tokencheck():
     if 'access_token' not in session:
@@ -89,6 +89,7 @@ def tokencheck():
     if datetime.now().timestamp() > session['expires_at']:
         return redirect('refresh-token')
 
+##FUNCTIONS UNDERNEATH##
 
 @app.route('/api/playlists')
 def get_playlists():
@@ -137,7 +138,13 @@ def get_liked_tracks():
         return {"error in database for liked": str(e)}, 500
     finally:
         DBsession.close()
-    return redirect('/api/recommendations')  
+    return response.json()
+
+@app.route('/api/refresh')
+def refresh_database():
+    DBsession.query(NewPlaylist).delete()
+    DBsession.commit()
+    return redirect('/api/recommendations')
 
 @app.route('/api/recommendations')
 def get_recommendations():
@@ -170,7 +177,7 @@ def get_recommendations():
         return {"error in databse in recommendations": str(e)}, 500
     finally:
         DBsession.close()
-    return redirect('/api/create_new_playlist')  
+    return redirect('/api/check-liked')  
 #this database matches spotify response json
 
 @app.route('/api/check-liked')
@@ -178,37 +185,51 @@ def get_liked_recommendations():
     tokencheck()
     headers = {
     'Authorization': f"Bearer {session['access_token']}"
-    }    
-    recommendations = DBsession.query(Recommendations.id).order_by(asc(Recommendations.index)).limit(50).all()
-    track_id_list = []
-    track_id_list = [str(recommendation.id) for recommendation in recommendations]
-    track_id_list = ','.join(track_id_list)
+    }
+    minimum = DBsession.query(NewPlaylist).count()
+    while minimum < 10:
+        print (minimum)
+        recommendations_id = DBsession.query(Recommendations.id).order_by(asc(Recommendations.index)).limit(50).all()
+        recommendations_name = DBsession.query(Recommendations.name).order_by(asc(Recommendations.index)).limit(50).all()
+        track_id_list = [str(recommendation.id) for recommendation in recommendations_id]
+        track_id_join = ','.join(track_id_list)
+        
+        response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks/contains?ids='+track_id_join, headers=headers)
+        liked_recommendations_json = response.json()
+        #index the 'true' bool from the json data
+        liked_rec_string = json.dumps(liked_recommendations_json)
+        split_string = liked_rec_string.split()
+        index=[]
+        for i, string in enumerate(split_string):
+            if 'true' in string:
+                index.append(i + 1)
+        if index == []:
+            print("No liked songs in recommendations pull")
     
-    response = requests.get(os.getenv("API_BASE_URL") + 'me/tracks/contains?ids='+track_id_list, headers=headers)
-    liked_recommendations_json = response.json()
-    #index the 'true' bool from the json data
-    liked_rec_string = json.dumps(liked_recommendations_json)
-    split_string = liked_rec_string.split()
-    index= []
-    for i, string in enumerate(split_string):
-        if 'true' in string:
-            index.append(i + 1)
-    if index == None:
-        print("No liked songs in recommendation pull!!!")
-    print(index, "OMGOMGOMGOGM")
-   
-    #find the corresponding indeces in the recommendations data
-    new_playlist_tracks = []
-    split_list = track_id_list.split(",")
-    for j, track in enumerate(split_list):
-        if j in index and j<50:
-            new_playlist_tracks.append(split_list[j-1])
-    return new_playlist_tracks
+        #find the corresponding indeces in the recommendations data
+        new_id_list = []
+        new_name_list = [str(recommendation.name) for recommendation in recommendations_name]
+        for j, track in enumerate(track_id_list):
+            if j in index and j<50:
+                new_id_list.append(track_id_list[j-1])
+                print(track_id_list[j-1])
+                existing_track = DBsession.query(NewPlaylist).filter(NewPlaylist.id == track_id_list[j-1]).first()
+                if existing_track:
+                    existing_track.name = new_name_list[j-1]
+                else:
+                    new_tracks = NewPlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
+                    DBsession.add(new_tracks)
+            DBsession.commit()
+        return(redirect('/api/recommendations'))
+    return("yippy")
 #add these to new playlist database 
 #then make a new endpoint to add them to new created playlist
 
-
-'''
+@app.route('/api/create-playlist')
+def create_playlist():
+    headers = {
+    'Authorization': f"Bearer {session['access_token']}"
+    }
     #get user for creating playlist
     user_response = requests.get(os.getenv("API_BASE_URL") + 'me', headers=headers)
     user_json = user_response.json()
@@ -216,9 +237,11 @@ def get_liked_recommendations():
     user_id = user_json.get('id', None)
 
     #get the playlist id after creation
-    req_body = '{ "name": "YIPPPPYYYYY", "description": "Playlist based on recommendations", "public": false }'
+    req_body = '{ "name": "TEST", "description": "Playlist based on recommendations", "public": false }'
     create_playlist_response = requests.post(os.getenv("API_BASE_URL") + 'users/'+user_id+'/playlists', data=req_body, headers=headers)
     create_playlist_json = create_playlist_response.json()
+
+    
 
 
 #works until this point 
