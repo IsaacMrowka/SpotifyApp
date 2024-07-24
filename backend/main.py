@@ -49,7 +49,7 @@ def login():
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': True,  # True renewed forces relogin for debugging
+        'show_dialog': False,  # True renewed forces relogin for debugging
     }
     
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -80,7 +80,7 @@ def callback():
         session['refresh_token'] = token_info.get('refresh_token')
         session['expires_at'] = datetime.now().timestamp() + token_info.get('expires_in', 3600)
 
-        return redirect('/api/refresh')
+        return redirect('/api/create-playlist')
 
 def tokencheck():
     if 'access_token' not in session:
@@ -89,7 +89,7 @@ def tokencheck():
     if datetime.now().timestamp() > session['expires_at']:
         return redirect('refresh-token')
 
-##FUNCTIONS UNDERNEATH##
+##--FUNCTIONS UNDERNEATH--##
 
 @app.route('/api/playlists')
 def get_playlists():
@@ -153,8 +153,26 @@ def get_recommendations():
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
-    response = requests.get(os.getenv("API_BASE_URL") + 'recommendations?limit=50&seed_tracks=1HOhw9h6IpSVpFPS6OzUu4', headers=headers)
-    recommendations_json = response.json()
+    try:
+        response = requests.get(os.getenv("API_BASE_URL")+'recommendations?limit=100&seed_tracks=5plW0IS6XNNFFvLCH15edI', headers=headers)
+        recommendations_json = response.json()
+    except:
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                print(data)
+            except ValueError as e:
+                print("JSON decode error:", e)
+        elif response.status_code == 429:
+            retry_after = response.headers.get('Retry-After')
+            print("Too Many Requests: Retry after", retry_after, "seconds.")
+        elif response.status_code == 401:
+            print("Unauthorized: Check your access token.")
+        elif response.status_code == 400:
+            print("Bad Request: Check your query parameters.")
+        else:
+            print("Error:", response.status_code)
+            print("Response content:", response.text)
     #delete any recommendations from prior request
     DBsession.query(Recommendations).delete()
     DBsession.commit()
@@ -189,8 +207,8 @@ def get_liked_recommendations():
     minimum = DBsession.query(NewPlaylist).count()
     while minimum < 10:
         print (minimum)
-        recommendations_id = DBsession.query(Recommendations.id).order_by(asc(Recommendations.index)).limit(50).all()
-        recommendations_name = DBsession.query(Recommendations.name).order_by(asc(Recommendations.index)).limit(50).all()
+        recommendations_id = DBsession.query(Recommendations.id).order_by(asc(Recommendations.index)).limit(100).all()
+        recommendations_name = DBsession.query(Recommendations.name).order_by(asc(Recommendations.index)).limit(100).all()
         track_id_list = [str(recommendation.id) for recommendation in recommendations_id]
         track_id_join = ','.join(track_id_list)
         
@@ -220,13 +238,12 @@ def get_liked_recommendations():
                     new_tracks = NewPlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
                     DBsession.add(new_tracks)
             DBsession.commit()
-        return(redirect('/api/recommendations'))
-    return("yippy")
-#add these to new playlist database 
-#then make a new endpoint to add them to new created playlist
+        return redirect('/api/recommendations')
+    return redirect('/api/create-playlist')
 
 @app.route('/api/create-playlist')
 def create_playlist():
+    tokencheck()
     headers = {
     'Authorization': f"Bearer {session['access_token']}"
     }
@@ -234,35 +251,33 @@ def create_playlist():
     user_response = requests.get(os.getenv("API_BASE_URL") + 'me', headers=headers)
     user_json = user_response.json()
     user_id = None
-    user_id = user_json.get('id', None)
+    user_id = user_json.get('id')
 
     #get the playlist id after creation
-    req_body = '{ "name": "TEST", "description": "Playlist based on recommendations", "public": false }'
-    create_playlist_response = requests.post(os.getenv("API_BASE_URL") + 'users/'+user_id+'/playlists', data=req_body, headers=headers)
+    create_playlist_body = '{ "name": "TEST", "description": "Playlist based on recommendations", "public": false }'
+    create_playlist_response = requests.post(os.getenv("API_BASE_URL") + 'users/'+user_id+'/playlists', data=create_playlist_body, headers=headers)
     create_playlist_json = create_playlist_response.json()
+    playlist_id = create_playlist_json.get('id')
 
-    
+    #get tracks from databse
+    new_tracks_id = DBsession.query(NewPlaylist.id).limit(1).all()
+    track_id_list = [str(track.id) for track in new_tracks_id]
+    track_id_list.insert(0,'')
 
+    track_id_join = ', spotify:track:'.join(track_id_list)
+    track_id_join.strip(', ')
+    print (track_id_join, "OHOHOHOHOHOHOHOHOHOHOHOHOHOHOH")
 
-#works until this point 
+    #testing WORKS
+    test_id =['spotify:track:5plW0IS6XNNFFvLCH15edI', 'spotify:track:3GXSywNvYLAVUCtjMHkKDh']
+    #add tracks to playlist
+    # cant use tuple 
+    #try to use track_id_list as a list
+    #maybe split
 
-    playlist_id = None
-    playlist_id = create_playlist_json.get('id', None)
-
-    #add tracks to the playlist
-    id_list = []
-    try:
-        for id in new_playlist_tracks:
-            id_list.append(id)
-        id_list = ','.join(id_list)
-    except:
-        pass
-        print("No track to join")
-
-    try:
-        requests.post(os.getenv("API_BASE_URL") + 'playlists/'+playlist_id+'/tracks?', headers=headers)
-'''
-    #finally: return(split_string)
+    add_tracks_body = json.dumps({ "uris": test_id })
+    response = requests.post(os.getenv("API_BASE_URL") + 'playlists/'+playlist_id+'/tracks', data=add_tracks_body, headers=headers)
+    return(response.json())
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
