@@ -21,4 +21,5 @@ class NewPlaylist(Base):
     __tablename__ = "new_tracks"
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
+    
 Base.metadata.create_all(engine)
