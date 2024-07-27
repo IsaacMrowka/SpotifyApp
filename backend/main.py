@@ -88,7 +88,7 @@ def tokencheck():
     if datetime.now().timestamp() > session['expires_at']:
         return redirect('refresh-token')
 
-##--FUNCTIONS UNDERNEATH--##
+##--POST LOGIN FUNCTIONS UNDERNEATH--##
 
 @app.route('/api/search')
 def search():
@@ -159,6 +159,8 @@ def get_liked_tracks():
         DBsession.close()
     return response.json()
 
+## below is functionality for creating a palylist based on a single songs recommendations that are in the liked playlist ##
+
 @app.route('/api/refresh')
 def refresh_database():
     DBsession.query(NewPlaylist).delete()
@@ -172,11 +174,12 @@ def get_recommendations():
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
+
     DBsession.query(Recommendations).delete()
     DBsession.commit()
 
     try:
-        response = requests.get(os.getenv("API_BASE_URL")+'recommendations?limit=50&seed_tracks=5plW0IS6XNNFFvLCH15edI', headers=headers)
+        response = requests.get(os.getenv("API_BASE_URL")+'recommendations?limit=50&seed_tracks=1ckta9xwbEcxLaGClreVRf', headers=headers)
         recommendations_json = response.json()
     except requests.exceptions.HTTPError as http_err:
         if response.status_code == 429:
@@ -223,7 +226,7 @@ def get_liked_recommendations():
     'Authorization': f"Bearer {session['access_token']}"
     }
     minimum = DBsession.query(NewPlaylist).count()
-    while minimum < 10:
+    while minimum < 12 or request_count < 10:
         minimum = DBsession.query(NewPlaylist).count()
         print (minimum)
 
@@ -262,7 +265,15 @@ def get_liked_recommendations():
                     new_tracks = NewPlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
                     DBsession.add(new_tracks)
             DBsession.commit()
+        request_count = request_count + 1
         return redirect('/api/recommendations')
+    #add the searched/original song to the beginning of the playlist
+    '''
+    session.query(Recommendations).update({Recommendations.index: Recommendations.index + 1})
+    new_recommendation = Recommendations(id=id, name=name, index=1)
+    session.add(new_recommendation)
+    session.commit()
+    '''
     return redirect('/api/create-playlist')
 
 @app.route('/api/create-playlist')
@@ -284,23 +295,11 @@ def create_playlist():
     playlist_id = create_playlist_json.get('id')
 
     #get track id from databse and insert uri
-    new_tracks_id = DBsession.query(NewPlaylist.id).limit(5).all()
+    new_tracks_id = DBsession.query(NewPlaylist.id).limit(11).all()
     track_id_list = [str(track.id) for track in new_tracks_id]
     #track_id_list.insert(0,'')
     prefix = 'spotify:track:'
     track_id_list = [prefix + item for item in track_id_list]
-    '''
-    track_id_join = ', spotify:track:'.join(track_id_list)
-    track_id_join.strip(', ')
-    print (track_id_list, "OHOHOHOHOHOHOHOHOHOHOHOHOHOHOH")
-    
-    
-    test_id =['spotify:track:5plW0IS6XNNFFvLCH15edI', 'spotify:track:3GXSywNvYLAVUCtjMHkKDh']
-    #add tracks to playlist
-    # cant use tuple 
-    #try to use track_id_list as a list
-    #maybe split
-    '''
 
     add_tracks_body = json.dumps({ "uris": track_id_list })
     response = requests.post(os.getenv("API_BASE_URL") + 'playlists/'+playlist_id+'/tracks', data=add_tracks_body, headers=headers)
@@ -308,4 +307,4 @@ def create_playlist():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
- 
+    
