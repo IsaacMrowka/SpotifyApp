@@ -48,7 +48,7 @@ def login():
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': False,  # True renewed forces relogin for debugging
+        'show_dialog': True,  # True renewed forces relogin for debugging
     }
 
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -97,7 +97,6 @@ def search():
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
-
     params = {
         'q': query,
         'type': 'track',
@@ -174,12 +173,12 @@ def get_recommendations():
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
-
+    
+    #delete any recommendations from prior request
     DBsession.query(Recommendations).delete()
     DBsession.commit()
-
     try:
-        response = requests.get(os.getenv("API_BASE_URL")+'recommendations?limit=50&seed_tracks=1ckta9xwbEcxLaGClreVRf', headers=headers)
+        response = requests.get(os.getenv("API_BASE_URL")+'recommendations?limit=50&seed_tracks=5plW0IS6XNNFFvLCH15edI', headers=headers)
         recommendations_json = response.json()
     except requests.exceptions.HTTPError as http_err:
         if response.status_code == 429:
@@ -196,7 +195,6 @@ def get_recommendations():
         print(f"Other error occurred: {err}")
         return {'error': {'status': 500, 'message': 'Internal server error.'}}, 500
 
-    #delete any recommendations from prior request
     i = 1
     try:
         for track in recommendations_json["tracks"]:
@@ -226,7 +224,7 @@ def get_liked_recommendations():
     'Authorization': f"Bearer {session['access_token']}"
     }
     minimum = DBsession.query(NewPlaylist).count()
-    while minimum < 12 or request_count < 10:
+    while minimum < 12:
         minimum = DBsession.query(NewPlaylist).count()
         print (minimum)
 
@@ -243,11 +241,15 @@ def get_liked_recommendations():
         #index the 'true' bool from the json data
         liked_track_string = json.dumps(liked_tracks_json)
         split_string = liked_track_string.split()
-        index=[]
+        true_index=[]
+        false_index=[]
+
         for i, string in enumerate(split_string):
             if 'true' in string:
-                index.append(i + 1)
-        if index == []:
+                true_index.append(i+1)
+            else:
+                false_index.append(i+1)
+        if true_index == []:
             #all recommendations returned false for liked
             print("No liked songs in recommendations pull")
 
@@ -255,7 +257,7 @@ def get_liked_recommendations():
         new_id_list = []
         new_name_list = [str(recommendation.name) for recommendation in recommendations_name]
         for j, track in enumerate(track_id_list):
-            if j in index and j<100:
+            if j in false_index and j<100:
                 new_id_list.append(track_id_list[j-1])
                 print(track_id_list[j-1])
                 existing_track = DBsession.query(NewPlaylist).filter(NewPlaylist.id == track_id_list[j-1]).first()
@@ -265,7 +267,7 @@ def get_liked_recommendations():
                     new_tracks = NewPlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
                     DBsession.add(new_tracks)
             DBsession.commit()
-        request_count = request_count + 1
+        #request_count = request_count + 1
         return redirect('/api/recommendations')
     #add the searched/original song to the beginning of the playlist
     '''
@@ -307,4 +309,3 @@ def create_playlist():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
-    
