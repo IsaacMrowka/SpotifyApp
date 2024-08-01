@@ -5,7 +5,7 @@ from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker, load_only
 from sqlalchemy import asc, inspect
-from db_operations import Track, Recommendations, NewPlaylist, engine
+from db_operations import Track, Recommendations, TruePlaylist, FalsePlaylist, EndpointRequest, engine
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173"] ,supports_credentials=True)
@@ -126,6 +126,7 @@ def get_spotify_user():
     }
     response = requests.get(os.getenv("API_BASE_URL") + 'me', headers=headers)
     return response.json()
+#each of their song radios will be added to the database at varying limits (song amounts)
 
 @app.route('/api/tracks')
 def get_liked_tracks():
@@ -162,7 +163,9 @@ def get_liked_tracks():
 
 @app.route('/api/refresh')
 def refresh_database():
-    DBsession.query(NewPlaylist).delete()
+    DBsession.query(TruePlaylist).delete()
+    DBsession.query(FalsePlaylist).delete()
+    DBsession.query(EndpointRequest).delete()
     DBsession.commit()
     return redirect('/api/recommendations')
 
@@ -206,7 +209,7 @@ def get_recommendations():
             else:
                 track_recommendations = Recommendations(index= i, id=track_id, name=track_name)
                 DBsession.add(track_recommendations)
-                i += 1
+                i = i + 1
 
             DBsession.commit()
     except Exception as e:
@@ -223,10 +226,9 @@ def get_liked_recommendations():
     headers = {
     'Authorization': f"Bearer {session['access_token']}"
     }
-    minimum = DBsession.query(NewPlaylist).count()
-    while minimum < 12:
-        minimum = DBsession.query(NewPlaylist).count()
-        print (minimum)
+    request_counter = DBsession.query(EndpointRequest).count()
+    while request_counter <= 5:
+        print ("request counter: ", request_counter)
 
         #query and save the recommendations table
         recommendations_id = DBsession.query(Recommendations.id).order_by(asc(Recommendations.index)).limit(100).all()
@@ -242,32 +244,39 @@ def get_liked_recommendations():
         liked_track_string = json.dumps(liked_tracks_json)
         split_string = liked_track_string.split()
         true_index=[]
-        false_index=[]
 
         for i, string in enumerate(split_string):
             if 'true' in string:
                 true_index.append(i+1)
-            else:
-                false_index.append(i+1)
+
         if true_index == []:
             #all recommendations returned false for liked
             print("No liked songs in recommendations pull")
 
         #find the corresponding indeces in the recommendations data
-        new_id_list = []
         new_name_list = [str(recommendation.name) for recommendation in recommendations_name]
         for j, track in enumerate(track_id_list):
-            if j in false_index and j<100:
-                new_id_list.append(track_id_list[j-1])
-                print(track_id_list[j-1])
-                existing_track = DBsession.query(NewPlaylist).filter(NewPlaylist.id == track_id_list[j-1]).first()
+            if j in true_index and j<100:
+                existing_track = DBsession.query(TruePlaylist).filter(TruePlaylist.id == track_id_list[j-1]).first()
                 if existing_track:
                     existing_track.name = new_name_list[j-1]
                 else:
-                    new_tracks = NewPlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
-                    DBsession.add(new_tracks)
+                    true_tracks = TruePlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
+                    DBsession.add(true_tracks)
+            else:
+                existing_track = DBsession.query(FalsePlaylist).filter(FalsePlaylist.id == track_id_list[j-1]).first()
+                if existing_track:
+                    existing_track.name = new_name_list[j-1]
+                else:
+                    false_tracks = FalsePlaylist(id=track_id_list[j-1], name=new_name_list[j-1])
+                    DBsession.add(false_tracks)
+
             DBsession.commit()
-        #request_count = request_count + 1
+        
+        request_counter = request_counter + 1
+        index_counter = EndpointRequest(index=request_counter)
+        DBsession.add(index_counter)
+        DBsession.commit()
         return redirect('/api/recommendations')
     #add the searched/original song to the beginning of the playlist
     '''
@@ -297,11 +306,11 @@ def create_playlist():
     playlist_id = create_playlist_json.get('id')
 
     #get track id from databse and insert uri
-    new_tracks_id = DBsession.query(NewPlaylist.id).limit(11).all()
+    new_tracks_id = DBsession.query(FalsePlaylist.id).limit(11).all()
     track_id_list = [str(track.id) for track in new_tracks_id]
     #track_id_list.insert(0,'')
     prefix = 'spotify:track:'
-    track_id_list = [prefix + item for item in track_id_list]
+    track_id_list = [prefix + item for item in track_id_list]   
 
     add_tracks_body = json.dumps({ "uris": track_id_list })
     response = requests.post(os.getenv("API_BASE_URL") + 'playlists/'+playlist_id+'/tracks', data=add_tracks_body, headers=headers)

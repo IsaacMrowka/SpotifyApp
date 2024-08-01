@@ -17,9 +17,18 @@ class Recommendations(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
 
-class NewPlaylist(Base):
-    __tablename__ = "new_tracks"
+class TruePlaylist(Base):
+    __tablename__ = "true_tracks"
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
+
+class FalsePlaylist(Base):
+    __tablename__ = "false_tracks"
+    id = Column(String, primary_key=True, index=True)
+    name = Column(String, index=True)
+
+class EndpointRequest(Base):
+    __tablename__ = "counter"
+    index = Column(Integer, primary_key=True)
     
 Base.metadata.create_all(engine)
