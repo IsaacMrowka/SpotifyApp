@@ -27,14 +27,29 @@ const SpotifyData = () => {
         setQuery(e.target.value);
     };
 
+    const handleSearchSubmit = async (e) => {
+        e.preventDefault();
+        if (query.trim() === '') return;
+
+        try {
+            const res = await axios.get(`/api/search?q=${query}`);
+            setResults(res.data.tracks.items);
+        } catch (err) {
+            console.error('Error fetching search results', err);
+        }
+    };
+
     return (
         <div>
-            <input
-                type="text"
-                value={query}
-                onChange={handleSearchChange}
-                placeholder="Search for songs or artists"
-            />
+            <form onSubmit={handleSearchSubmit}>
+                <input
+                    type="text"
+                    value={query}
+                    onChange={handleSearchChange}
+                    placeholder="Search for songs or artists"
+                />
+                <button type="submit">Search</button>
+            </form>
             {/* Render user data, playlist data, liked data, and search results */}
             <div>
                 {userData && <div>User Data: {JSON.stringify(userData)}</div>}
@@ -43,10 +58,10 @@ const SpotifyData = () => {
                 {results.length > 0 && (
                     <div>
                         Search Results:
-                        <ul>
-                            {results.map((result, index) => (
-                                <li key={index}>{result}</li>
-                            ))}
+                        <ul> 
+                            <li key={track.id}>
+                                    {track.name} by {track.artists.map(artist => artist.name).join(', ')}
+                            </li>
                         </ul>
                     </div>
                 )}

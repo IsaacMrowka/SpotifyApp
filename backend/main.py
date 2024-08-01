@@ -93,7 +93,10 @@ def tokencheck():
 @app.route('/api/search')
 def search():
     tokencheck()
-    query = request.args.get('query')
+    query = request.args.get('q')
+    if not query:
+        return jsonify({'error': 'Missing query parameter'}), 400  # Handle missing query
+
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
@@ -103,7 +106,6 @@ def search():
         'limit': 1
     }
     response = requests.get(os.getenv("API_BASE_URL") + '/search', headers=headers, params=params)
-    search_response = response.json()
     return(response.json())
 
 #for now add one item limit and later add functionality to search multiple tracks that will be stored in the database and then
