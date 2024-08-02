@@ -1,27 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const SpotifyData = () => {
-    const [userData, setUserData] = useState(null);
+const SpotifyData = ({ userData }) => {
     const [playlistData, setPlaylistData] = useState(null);
     const [likedData, setLikedData] = useState(null);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
 
+    useEffect(() => {
+        if (userData) {
+            fetchData('/api/playlists', setPlaylistData);
+            fetchData('/api/tracks', setLikedData);
+        }
+    }, [userData]);
+
     const fetchData = async (url, setData) => {
         try {
-            const res = await axios.get(url);
+            const res = await axios.get(url, { withCredentials: true });
             setData(res.data);
         } catch (err) {
             console.error(err);
         }
     };
-
-    useEffect(() => {
-        fetchData('/api/user', setUserData);
-        fetchData('/api/playlists', setPlaylistData);
-        fetchData('/api/tracks', setLikedData);
-    }, []);
 
     const handleSearchChange = (e) => {
         setQuery(e.target.value);
@@ -29,42 +29,46 @@ const SpotifyData = () => {
 
     const handleSearchSubmit = async (e) => {
         e.preventDefault();
-        if (query.trim() === '') return;
-
         try {
-            const res = await axios.get(`/api/search?q=${query}`);
-            setResults(res.data.tracks.items);
+            const res = await axios.get(`http://localhost:5000/api/search?q=${query}`);
+            console.log(res.data)
+            setResults(res.data);//checkspotify api
         } catch (err) {
             console.error('Error fetching search results', err);
         }
     };
 
     return (
-        <div>
-            <form onSubmit={handleSearchSubmit}>
+        <div className="spotify-data">
+            <form className="search-bar" onSubmit={handleSearchSubmit}>
                 <input
                     type="text"
                     value={query}
                     onChange={handleSearchChange}
-                    placeholder="Search for songs or artists"
+                    placeholder="Search for track"
                 />
                 <button type="submit">Search</button>
             </form>
-            {/* Render user data, playlist data, liked data, and search results */}
             <div>
-                {userData && <div>User Data: {JSON.stringify(userData)}</div>}
-                {playlistData && <div>Playlist Data: {JSON.stringify(playlistData)}</div>}
-                {likedData && <div>Liked Data: {JSON.stringify(likedData)}</div>}
-                {results.length > 0 && (
-                    <div>
-                        Search Results:
-                        <ul> 
+                {results > 0 ? (
+                    <ul>
+                        {results.map((track) => (
                             <li key={track.id}>
-                                    {track.name} by {track.artists.map(artist => artist.name).join(', ')}
+                                {track.name}
                             </li>
-                        </ul>
-                    </div>
+                        ))}
+                    </ul>
+                ) : (
+                    <div>No results Found</div>
                 )}
+            </div>
+            <div className="content">
+                <div className="left-container">
+                    {/* Placeholder for future data */}
+                </div>
+                <div className="right-container">
+                    {/* Placeholder for future data */}
+                </div>
             </div>
         </div>
     );

@@ -48,7 +48,7 @@ def login():
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': True,  # True renewed forces relogin for debugging
+        'show_dialog': True,  # True forces relogin for debugging
     }
 
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -79,7 +79,7 @@ def callback():
         session['refresh_token'] = token_info.get('refresh_token')
         session['expires_at'] = datetime.now().timestamp() + token_info.get('expires_in', 3600)
 
-        return redirect('/api/refresh')
+        return redirect('http://localhost:5173/')
 
 def tokencheck():
     if 'access_token' not in session:

@@ -1,42 +1,82 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-family: Arial, sans-serif;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.header {
+  display: flex;
+  justify-content: space-between;
+  background-color: #f5f5f5;
+  position:fixed;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.login-button {
+  padding: 10px 20px;
+  background-color: #1db954;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 16px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.login-button:hover {
+  background-color: #1ed760;
 }
 
-.card {
-  padding: 2em;
+.user-data {
+  display: flex;
+  align-items:baseline;
+  flex-direction:column;
 }
 
-.read-the-docs {
-  color: #888;
+.user-data img {
+  margin: 10px;
+}
+
+.user-data div {
+  font-size: 1.2em;
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+}
+
+header h2{
+font-family: 'Arial', 'Helvetica', sans-serif;
+font-size: 1.5em;
+font-weight:100;
+}
+
+
+.search-bar {
+  display: flex;
+  align-items: center;
+}
+
+.search-bar input {
+  padding: 5px;
+  font-size: 16px;
+}
+
+.search-bar button {
+  padding: 5px 10px;
+  margin-left: 10px;
+  font-size: 16px;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  padding: 20px;
+}
+
+.left-container, .right-container {
+  flex: 1;
+  margin: 10px;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
 }
