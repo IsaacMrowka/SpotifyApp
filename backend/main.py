@@ -5,7 +5,7 @@ from flask_cors import CORS, cross_origin
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker, load_only
 from sqlalchemy import asc, inspect
-from db_operations import Track, Recommendations, TruePlaylist, FalsePlaylist, EndpointRequest, engine
+from db_operations import Track, Recommendations, TruePlaylist, FalsePlaylist, EndpointRequest, Search, engine
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173"] ,supports_credentials=True)
@@ -48,7 +48,7 @@ def login():
         'response_type': 'code',
         'scope': scope,
         'redirect_uri': os.getenv("REDIRECT_URI"),
-        'show_dialog': True,  # True forces relogin for debugging
+        'show_dialog': False,  # True forces relogin for debugging
     }
 
     auth_url = f"{os.getenv('AUTH_URL')}?{urllib.parse.urlencode(params)}"
@@ -90,23 +90,47 @@ def tokencheck():
 
 ##--POST LOGIN FUNCTIONS UNDERNEATH--##
 
+@app.route('/api/save_query', methods=['POST'])
+def save_query():
+    data = request.get_json()
+    query_text = data.get('query')
+    print(query_text)
+    id=1
+    new_query = Search(id=id, query=query_text)
+    DBsession.add(new_query)
+    DBsession.commit()
+        
+    return print("message': 'Query saved successfully"), 200
+
+
 @app.route('/api/search')
 def search():
     tokencheck()
-    query = request.args.get('q')
-    if not query:
-        return jsonify({'error': 'Missing query parameter'}), 400  # Handle missing query
+    query = DBsession.query(Search).first()
+
+    params = {
+        'q': query,
+        'type': 'track',
+        'limit': 10,
+        'offset': 0
+    }
 
     headers = {
         'Authorization': f"Bearer {session['access_token']}"
     }
-    params = {
-        'q': query,
-        'type': 'track',
-        'limit': 1
-    }
-    response = requests.get(os.getenv("API_BASE_URL") + '/search', headers=headers, params=params)
-    return(response.json())
+
+    try:
+        response = requests.get('https://api.spotify.com/v1/search', params=params, headers=headers)
+        response.raise_for_status()  # Raise HTTPError for bad responses
+        return jsonify(response.json())
+    except requests.exceptions.HTTPError as err:
+        print(f"HTTP error occurred: {err}")
+        return jsonify({'error': str(err)}), response.status_code
+    except Exception as err:
+        print(f"Other error occurred: {err}")
+        return jsonify({'error': 'An error occurred'}), 500    
+    #print(response.json())
+    #return(response.json())
 
 #for now add one item limit and later add functionality to search multiple tracks that will be stored in the database and then
 #each of their song radios will be added to the database at varying limits (song amounts)
@@ -168,6 +192,8 @@ def refresh_database():
     DBsession.query(TruePlaylist).delete()
     DBsession.query(FalsePlaylist).delete()
     DBsession.query(EndpointRequest).delete()
+    DBsession.query(Search).delete()
+
     DBsession.commit()
     return redirect('/api/recommendations')
 

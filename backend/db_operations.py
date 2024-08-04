@@ -30,5 +30,10 @@ class FalsePlaylist(Base):
 class EndpointRequest(Base):
     __tablename__ = "counter"
     index = Column(Integer, primary_key=True)
+
+class Search(Base):
+    __tablename__ = "data_query"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    query = Column(String)
     
 Base.metadata.create_all(engine)

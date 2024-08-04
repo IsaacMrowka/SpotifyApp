@@ -22,6 +22,23 @@ const SpotifyData = ({ userData }) => {
             console.error(err);
         }
     };
+    const sendData = async (url, data) => {
+        try {
+            const res = await axios.post(url, data, { withCredentials: true });
+            console.log('Data sent successfully:', res.data);
+            // Handle response if needed
+        } catch (err) {
+            console.error('Error sending data:', err);
+        }
+    };
+
+    const handleSaveQuery = async (query) => {
+        try {
+            await sendData('/api/save_query', { query });
+        } catch (err) {
+            console.error('Error sending query:', err);
+        }
+    };
 
     const handleSearchChange = (e) => {
         setQuery(e.target.value);
@@ -30,14 +47,12 @@ const SpotifyData = ({ userData }) => {
     const handleSearchSubmit = async (e) => {
         e.preventDefault();
         try {
-            const res = await axios.get(`http://localhost:5000/api/search?q=${query}`);
-            console.log(res.data)
-            setResults(res.data);//checkspotify api
+            await handleSaveQuery(query);  // Use handleSaveQuery to send data
         } catch (err) {
-            console.error('Error fetching search results', err);
+            console.error('Error sending query:', err);
         }
     };
-
+    
     return (
         <div className="spotify-data">
             <form className="search-bar" onSubmit={handleSearchSubmit}>
@@ -50,16 +65,10 @@ const SpotifyData = ({ userData }) => {
                 <button type="submit">Search</button>
             </form>
             <div>
-                {results > 0 ? (
-                    <ul>
-                        {results.map((track) => (
-                            <li key={track.id}>
-                                {track.name}
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <div>No results Found</div>
+                {results && (
+                    <div>
+                        <pre>{JSON.stringify(results, null, 2)}</pre>
+                    </div>           
                 )}
             </div>
             <div className="content">
