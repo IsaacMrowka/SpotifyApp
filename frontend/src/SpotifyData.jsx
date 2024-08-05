@@ -34,7 +34,7 @@ const SpotifyData = ({ userData }) => {
 
     const handleSaveQuery = async (query) => {
         try {
-            await sendData('/api/save_query', { query });
+            await sendData('/api/search', { query });
         } catch (err) {
             console.error('Error sending query:', err);
         }

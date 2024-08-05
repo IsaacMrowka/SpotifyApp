@@ -33,7 +33,6 @@ class EndpointRequest(Base):
 
 class Search(Base):
     __tablename__ = "data_query"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    query = Column(String)
+    id = Column(String, primary_key=True)
     
 Base.metadata.create_all(engine)

@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker, load_only
 from sqlalchemy import asc, inspect
 from db_operations import Track, Recommendations, TruePlaylist, FalsePlaylist, EndpointRequest, Search, engine
 
+
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173"] ,supports_credentials=True)
 app.secret_key = os.urandom(24)
@@ -90,28 +91,19 @@ def tokencheck():
 
 ##--POST LOGIN FUNCTIONS UNDERNEATH--##
 
-@app.route('/api/save_query', methods=['POST'])
-def save_query():
-    data = request.get_json()
-    query_text = data.get('query')
-    print(query_text)
-    id=1
-    new_query = Search(id=id, query=query_text)
-    DBsession.add(new_query)
-    DBsession.commit()
-        
-    return print("message': 'Query saved successfully"), 200
-
-
-@app.route('/api/search')
+@app.route('/api/search', methods=['POST','GET'])
 def search():
     tokencheck()
-    query = DBsession.query(Search).first()
+    refresh_database()
+    data = request.get_json()
+    query_text = data.get('query')
+
+    #query = DBsession.query(Search).first()
 
     params = {
-        'q': query,
-        'type': 'track',
-        'limit': 10,
+        'q': query_text,
+        'type': ['track', 'artist'],
+        'limit': 1,
         'offset': 0
     }
 
@@ -119,18 +111,18 @@ def search():
         'Authorization': f"Bearer {session['access_token']}"
     }
 
-    try:
-        response = requests.get('https://api.spotify.com/v1/search', params=params, headers=headers)
-        response.raise_for_status()  # Raise HTTPError for bad responses
-        return jsonify(response.json())
-    except requests.exceptions.HTTPError as err:
-        print(f"HTTP error occurred: {err}")
-        return jsonify({'error': str(err)}), response.status_code
-    except Exception as err:
-        print(f"Other error occurred: {err}")
-        return jsonify({'error': 'An error occurred'}), 500    
-    #print(response.json())
-    #return(response.json())
+    response = requests.get('https://api.spotify.com/v1/search', params=params, headers=headers)
+    response.raise_for_status()  # Raise HTTPError for bad responses
+    
+    search_json = response.json()
+    for track in search_json["tracks"]:
+        track_items = track["items"]
+        track_id = track_items["id"]
+        searched_track = Track(id=track_id)
+        DBsession.add(searched_track)
+        DBsession.commit()    
+    print(response.json())
+    return(response.json())
 
 #for now add one item limit and later add functionality to search multiple tracks that will be stored in the database and then
 #each of their song radios will be added to the database at varying limits (song amounts)
