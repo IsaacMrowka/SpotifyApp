@@ -11,6 +11,7 @@ const SpotifyData = ({ userData }) => {
         if (userData) {
             fetchData('/api/playlists', setPlaylistData);
             fetchData('/api/tracks', setLikedData);
+            fetchData('/api/search', setResults)
         }
     }, [userData]);
 
@@ -53,6 +54,8 @@ const SpotifyData = ({ userData }) => {
         }
     };
     
+    //get queried id and place it {result} into spotify embeds
+    //get playlsit id and place it into embeds
     return (
         <div className="spotify-data">
             <form className="search-bar" onSubmit={handleSearchSubmit}>
@@ -67,15 +70,17 @@ const SpotifyData = ({ userData }) => {
             <div>
                 {results && (
                     <div>
-                        <pre>{JSON.stringify(results, null, 2)}</pre>
+                        <iframe src="https://open.spotify.com/embed/track/3vT8gzLffHjauZNwt4BtPN?utm_source=generator" width="100%" height="100" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
                     </div>           
                 )}
             </div>
             <div className="content">
                 <div className="left-container">
+                    <iframe src="https://open.spotify.com/embed/playlist/0vXnd42buRJJJJSWMb2NQf?utm_source=generator" width="100%" height="352" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
                     {/* Placeholder for future data */}
                 </div>
                 <div className="right-container">
+                    <iframe src="https://open.spotify.com/embed/playlist/0vXnd42buRJJJJSWMb2NQf?utm_source=generator" width="100%" height="352" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
                     {/* Placeholder for future data */}
                 </div>
             </div>

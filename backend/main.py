@@ -94,11 +94,8 @@ def tokencheck():
 @app.route('/api/search', methods=['POST','GET'])
 def search():
     tokencheck()
-    refresh_database()
     data = request.get_json()
     query_text = data.get('query')
-
-    #query = DBsession.query(Search).first()
 
     params = {
         'q': query_text,
@@ -115,17 +112,13 @@ def search():
     response.raise_for_status()  # Raise HTTPError for bad responses
     
     search_json = response.json()
-    for track in search_json["tracks"]:
-        track_items = track["items"]
-        track_id = track_items["id"]
-        searched_track = Track(id=track_id)
+    for track in search_json["tracks"]["items"]:
+        track_id = track["id"]
+        searched_track = Search(id=track_id)
         DBsession.add(searched_track)
         DBsession.commit()    
     print(response.json())
-    return(response.json())
-
-#for now add one item limit and later add functionality to search multiple tracks that will be stored in the database and then
-#each of their song radios will be added to the database at varying limits (song amounts)
+    return redirect('/api/playlsits')
 
 @app.route('/api/playlists')
 def get_playlists():
@@ -292,7 +285,7 @@ def get_liked_recommendations():
                     DBsession.add(false_tracks)
 
             DBsession.commit()
-        
+
         request_counter = request_counter + 1
         index_counter = EndpointRequest(index=request_counter)
         DBsession.add(index_counter)

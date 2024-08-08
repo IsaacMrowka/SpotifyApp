@@ -1,8 +1,10 @@
+import os
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base
 
-db_url = "sqlite:///myspotifydatabase.db"
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(BASE_DIR, 'myspotifydatabase.db')
+db_url = f'sqlite:///{db_path}'
 engine = create_engine(db_url)
 Base = declarative_base()
 

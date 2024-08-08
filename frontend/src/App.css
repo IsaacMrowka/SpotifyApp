@@ -35,6 +35,11 @@
 .user-data img {
   margin: 10px;
 }
+h1 {
+  font-family: 'Arial', 'Helvetica', sans-serif;
+  font-size: 1.5em;
+  font-weight:100;
+}
 
 .user-data div {
   font-size: 1.2em;
